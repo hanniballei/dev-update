@@ -54,12 +54,37 @@ npm 更新只替换磁盘文件，已有进程通常继续运行旧版本。分�
 
 ## 安全重启
 
-只有已获授权、确认目标服务且不会中断当前会话时才重启。明确要求“重启 Codex 服务”可复用授权；单纯请求全局包升级不代表允许中断服务。若当前代理由该 app-server 承载，完成其他维护并给出人工或独立会话执行的具体重启命令，不自行停掉当前服务，也不安排后台定时重启。
+只有已获授权、确认目标服务且不会中断当前会话时才重启。明确要求“重启 Codex 服务”可复用授权；单纯请求全局包升级不代表允许中断服务。
+
+磁盘升级完成后，只要服务仍在运行旧版本，就用下面这条命令取证，而不是只看 npm 版本：
+
+```bash
+codex app-server daemon version
+```
+
+`cliVersion` 是磁盘 CLI，`appServerVersion` 是运行中的服务。两者不一致时向用户要一次明确决定，并说明影响：当前代理不是由该 app-server 承载、且用户同意重启时，重启这一个服务并按下一节验证；用户不同意或当前代理由该服务承载时，不重启，但必须写出用户可见的后果和可执行命令，不能只写“需要重启”就结束。
 
 允许重启时只操作发现的那一个服务；重启后核对 active 状态、新 PID、运行版本，以及部署已有的健康检查。未运行的服务不因软件升级而自动启动。重启或健康验证失败时报告事实，保留诊断证据；版本回退需要单独授权。
+
+## 未重启时的用户可见后果
+
+磁盘已升级而服务仍是旧版本时，新版 TUI 启动会向后台 server 请求 `experimentalFeature/list`（请求标记 `tui-daemon-features`）并比对特性设置；不一致会出现：
+
+```text
+Background server has incompatible feature settings
+  Run without daemon this time / Restart with these settings
+```
+
+服务不是 Codex 托管时（`managedCodexVersion` 为 null、`$CODEX_HOME/app-server-daemon/settings.json` 缺失）还会补一句“This server is not managed by Codex. Restart cannot resolve this compatibility check.”，于是用户只剩“不用 daemon”这一个选项。旧服务也可能报“The local Codex service cannot check background terminals”。
+
+这种情况下的报告要包含：实际提示文案、可临时使用的 `codex --no-daemon`、以及独立会话的重启命令。不要把“磁盘已更新”说成“服务已更新”。
+
+重启后若同一提示仍出现，说明两边版本一致但特性设置不同：核对服务命令行上的 `-c features.<name>=...` 覆盖与 `config.toml` 的 `[features]`，把只由服务命令行设置、而客户端默认不同的特性写进共享配置（例如把 `features.code_mode_host=true` 同时写进 `[features]`），再重启验证。不要为了消除提示而删掉特性开关。
 
 ## 已核实的本机情况
 
 2026-10-07 制作时，本机存在 `codex-app-server.service`，入口 `/usr/local/bin/codex` 是一个包装器，最终寻找 PATH 或 nvm 默认环境中的 Codex。此信息仅为部署示例，每次使用仍需重新发现；仓库不存储服务配置、环境值或认证数据。
+
+2026-10-07 复核该本机时，npm 升级 `@openai/codex` 0.160.1 → 0.161.0 后，`codex app-server daemon version` 返回 `cliVersion 0.161.0 / appServerVersion 0.160.1 / managedCodexVersion null`，运行进程的原生二进制指向已被 npm 替换的 `(deleted)` 路径，0.161 的 TUI 因此弹出上一节的 daemon 兼容提示；`systemctl restart codex-app-server.service` 后两者一致（`codex doctor` 的 Background Server 段也变为新版本）。
 
 来源：[OpenAI Codex App Server 文档](https://learn.chatgpt.com/docs/app-server)。

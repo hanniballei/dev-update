@@ -17,13 +17,14 @@ npx skills add hanniballei/dev-update -g --skill dev-update -a codex -y
 使用 $dev-update，更新全部全局 npm 包；发现 Codex 服务时也更新其实际安装。
 使用 $dev-update，更新全部全局 npm 包，并更新全局 skills。
 使用 $dev-update，只更新 @openai/codex，不重启服务。
+使用 $dev-update，更新 @openai/codex，并在不影响当前会话时重启 Codex 服务。
 使用 $dev-update，只更新 Pi agent 插件。
 使用 $dev-update，更新全部开发工具，包括全局 npm、Codex 服务、skills 和 Pi 插件。
 ```
 
 入口 [`SKILL.md`](SKILL.md) 按范围加载指引。npm 更新默认包括主版本升级；脚本不替换 linked / 本地 / Git 安装，不降级高于 `latest` 的版本，并把 npm 自身留到最后。服务重启与磁盘软件升级分开处理，避免中断当前代理会话。
 
-全局 npm 更新默认包含发现的 Codex 服务：skill 会定位服务实际使用的安装并升级，不局限于当前 shell 的 npm prefix。相同安装只更新一次，其他安装分别处理，并核对平台原生组件与运行版本。服务发现和跨安装更新由代理按服务器指引执行，不是 `npm_update.py` 单独扫描所有服务。当前会话所属服务需要重启时，先完成磁盘升级并明确报告待重启；不会把“未重启”误称为运行版本已更新。
+全局 npm 更新默认包含发现的 Codex 服务：skill 会定位服务实际使用的安装并升级，不局限于当前 shell 的 npm prefix。相同安装只更新一次，其他安装分别处理，并核对平台原生组件与运行版本。服务发现和跨安装更新由代理按服务器指引执行，不是 `npm_update.py` 单独扫描所有服务。当前会话所属服务需要重启时，先完成磁盘升级并明确报告待重启；不会把“未重启”误称为运行版本已更新。**运行版本落后时**，skill 用 `codex app-server daemon version` 取证，并问一次是否在安全的独立会话重启；当前会话不由该服务承载并获同意时自行重启并验证，否则给出命令和下次启动会看到的 daemon 兼容提示（不会在未经授权时中断服务）。
 
 **注意 `skills check` 的版本差异：** 已核实 `skills@1.7.1` 的 `check` 是更新别名，不能用于仅检查任务；旧版本则可能还需要 `skills update` 才实际更新。具体流程见 [`references/skills-update.md`](references/skills-update.md)。不属于该 CLI 管理的技能会明确报告为未覆盖，而非声称已经更新。
 
