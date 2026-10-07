@@ -79,12 +79,28 @@ Background server has incompatible feature settings
 
 这种情况下的报告要包含：实际提示文案、可临时使用的 `codex --no-daemon`、以及独立会话的重启命令。不要把“磁盘已更新”说成“服务已更新”。
 
-重启后若同一提示仍出现，说明两边版本一致但特性设置不同：核对服务命令行上的 `-c features.<name>=...` 覆盖与 `config.toml` 的 `[features]`，把只由服务命令行设置、而客户端默认不同的特性写进共享配置（例如把 `features.code_mode_host=true` 同时写进 `[features]`），再重启验证。不要为了消除提示而删掉特性开关。
+重启后若同一提示仍出现，说明两边版本已一致、但特性设置仍不同。2026-10-07 在 0.161.0 手工托管 daemon 上实测：提示会直接列出要求共享的设置（例如 `api_key_model_discovery = true`、`auth_elicitation = true`、`code_mode_host = true`、`mcp_oauth_refresh_coordination = false`），并附“This session requires <feature> to be enabled”；`Restart with these settings` 因服务不由 Codex 托管而置灰。
+
+处理：把列出的设置写进客户端与服务共用的 `config.toml` 的 `[features]`（服务命令行上用 `-c features.<name>=...` 单独设置的特性也一并写进去），备份配置后重启服务，再用真实 TUI 验证；不要为了消除提示而删掉特性开关，也不要因此宣称服务已更新。
+
+## 验证用户可见行为
+
+`codex features list`、`codex doctor` 只能证明配置和版本，不能证明 TUI 不再弹提示。验证这类提示时在 tmux 或伪终端里真实启动一次 TUI，抓屏后搜索提示文案，然后结束该会话：
+
+```bash
+tmux new-session -d -s codexcheck -x 110 -y 34
+tmux send-keys -t codexcheck 'cd <信任目录> && TERM=xterm-256color codex' Enter
+sleep 25
+tmux capture-pane -p -t codexcheck -S -400 | grep -c "incompatible feature settings"
+tmux kill-session -t codexcheck
+```
+
+在受信任目录启动可避免文件夹信任提示；不得用这种方式发送对话或启动新任务。
 
 ## 已核实的本机情况
 
 2026-10-07 制作时，本机存在 `codex-app-server.service`，入口 `/usr/local/bin/codex` 是一个包装器，最终寻找 PATH 或 nvm 默认环境中的 Codex。此信息仅为部署示例，每次使用仍需重新发现；仓库不存储服务配置、环境值或认证数据。
 
-2026-10-07 复核该本机时，npm 升级 `@openai/codex` 0.160.1 → 0.161.0 后，`codex app-server daemon version` 返回 `cliVersion 0.161.0 / appServerVersion 0.160.1 / managedCodexVersion null`，运行进程的原生二进制指向已被 npm 替换的 `(deleted)` 路径，0.161 的 TUI 因此弹出上一节的 daemon 兼容提示；`systemctl restart codex-app-server.service` 后两者一致（`codex doctor` 的 Background Server 段也变为新版本）。
+2026-10-07 复核该本机时，npm 升级 `@openai/codex` 0.160.1 → 0.161.0 后，`codex app-server daemon version` 返回 `cliVersion 0.161.0 / appServerVersion 0.160.1 / managedCodexVersion null`，运行进程的原生二进制指向已被 npm 替换的 `(deleted)` 路径，0.161 的 TUI 因此弹出上一节的 daemon 兼容提示；`systemctl restart codex-app-server.service` 后两者一致（`codex doctor` 的 Background Server 段也变为新版本）。重启后提示仍出现，按 client 列出的共享设置补齐 `/root/.codex/config.toml` 的 `[features]`（配置已备份），再次重启服务后真 TUI 启动不再提示。
 
 来源：[OpenAI Codex App Server 文档](https://learn.chatgpt.com/docs/app-server)。
