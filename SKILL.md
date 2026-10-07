@@ -1,6 +1,6 @@
 ---
 name: dev-update
-description: 检查或更新全局 npm 工具、服务器上的 Codex 和全局安装的 skills；不处理项目依赖升级。
+description: 检查或更新全局 npm 工具、Codex 服务、全局 skills 和 Pi agent 插件；不处理项目依赖升级。
 ---
 
 # Dev Update
@@ -12,7 +12,8 @@ description: 检查或更新全局 npm 工具、服务器上的 Codex 和全局�
 - **npm 包**：运行下方脚本。它仅处理当前 npm prefix 的顶层全局包，不修改项目依赖。
 - **Codex / codex server**：全局 npm 维护时，读取 [Codex 服务器指引](references/codex-server.md) 发现 Codex 服务或进程。更新全部全局 npm 工具时，也升级 `codex-app-server.service` 等服务实际使用的 Codex 安装，即使它不属于当前 npm prefix；不能只报告发现服务或当前 CLI 已最新。
 - **全局 skills**：读取 [Skills 更新指引](references/skills-update.md)，特别注意 `check` 在不同版本中可能直接更新文件。
-- 未限定范围的“更新开发环境 / 全部开发工具”包含以上三项；“更新全部全局 npm 包”包含 npm 包和发现的 Codex 服务安装，但不更新 skills。用户明确限定某个包、排除服务器或只要求检查时，遵循该限制。
+- **Pi agent 插件**：读取 [Pi 插件更新指引](references/pi-extensions.md)，使用已核实的 `pi update --extensions` 更新 Pi 管理的插件包，默认只处理个人/全局配置。
+- 未限定范围的“更新开发环境 / 全部开发工具”包含以上四项；“更新全部全局 npm 包”包含 npm 包和发现的 Codex 服务安装，但不额外执行 skills 或 Pi 插件管理器更新。用户明确限定某个包、排除服务器或只要求检查时，遵循该限制。
 
 ## npm 检查与更新
 
@@ -36,4 +37,4 @@ python3 /path/to/dev-update/scripts/npm_update.py --apply
 
 ## 完成条件
 
-报告更新前后版本、失败和跳过项；Codex 服务需区分磁盘版本与运行版本，并注明是否需要重启。Skills 需说明已更新、无法追踪、查询失败或待人工处理的来源。只有请求范围内的验证已完成且没有未披露问题时，才称“全部更新完成”。
+报告更新前后版本、失败和跳过项；Codex 服务需区分磁盘版本与运行版本，并注明是否需要重启。Skills 和 Pi 插件需说明已更新、固定版本、本地来源、无法追踪或查询失败的项目。只有请求范围内的验证已完成且没有未披露问题时，才称“全部更新完成”。
