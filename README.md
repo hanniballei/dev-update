@@ -1,6 +1,6 @@
 # dev-update
 
-一个维护全局开发工具的 Agent Skill：检查和更新全局 npm 包，特别核实 Codex 服务实际使用的安装，并更新 `skills` CLI 管理的全局技能。兼容 Codex 与支持 Agent Skills 的工具。
+一个维护全局开发工具的 Agent Skill：检查和更新全局 npm 包，将发现的 Codex 服务实际安装一并升级，并更新 `skills` CLI 管理的全局技能。兼容 Codex 与支持 Agent Skills 的工具。
 
 ## 安装
 
@@ -14,11 +14,14 @@ npx skills add hanniballei/dev-update -g --skill dev-update -a codex -y
 
 ```text
 使用 $dev-update，只检查全局 npm 包和 Codex server，不更新。
+使用 $dev-update，更新全部全局 npm 包；发现 Codex 服务时也更新其实际安装。
 使用 $dev-update，更新全部全局 npm 包，并更新全局 skills。
 使用 $dev-update，只更新 @openai/codex，不重启服务。
 ```
 
 入口 [`SKILL.md`](SKILL.md) 按范围加载指引。npm 更新默认包括主版本升级；脚本不替换 linked / 本地 / Git 安装，不降级高于 `latest` 的版本，并把 npm 自身留到最后。服务重启与磁盘软件升级分开处理，避免中断当前代理会话。
+
+全局 npm 更新默认包含发现的 Codex 服务：skill 会定位服务实际使用的安装并升级，不局限于当前 shell 的 npm prefix。相同安装只更新一次，其他安装分别处理，并核对平台原生组件与运行版本。服务发现和跨安装更新由代理按服务器指引执行，不是 `npm_update.py` 单独扫描所有服务。当前会话所属服务需要重启时，先完成磁盘升级并明确报告待重启；不会把“未重启”误称为运行版本已更新。
 
 **注意 `skills check` 的版本差异：** 已核实 `skills@1.7.1` 的 `check` 是更新别名，不能用于仅检查任务；旧版本则可能还需要 `skills update` 才实际更新。具体流程见 [`references/skills-update.md`](references/skills-update.md)。不属于该 CLI 管理的技能会明确报告为未覆盖，而非声称已经更新。
 

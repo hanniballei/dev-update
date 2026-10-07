@@ -10,9 +10,9 @@ description: 检查或更新全局 npm 工具、服务器上的 Codex 和全局�
 ## 选择范围
 
 - **npm 包**：运行下方脚本。它仅处理当前 npm prefix 的顶层全局包，不修改项目依赖。
-- **Codex / codex server**：npm 检查也包含 `@openai/codex`，但不能据此断定服务器使用同一份安装。涉及 Codex 或完整开发环境维护时，读取 [Codex 服务器指引](references/codex-server.md)。
+- **Codex / codex server**：全局 npm 维护时，读取 [Codex 服务器指引](references/codex-server.md) 发现 Codex 服务或进程。更新全部全局 npm 工具时，也升级 `codex-app-server.service` 等服务实际使用的 Codex 安装，即使它不属于当前 npm prefix；不能只报告发现服务或当前 CLI 已最新。
 - **全局 skills**：读取 [Skills 更新指引](references/skills-update.md)，特别注意 `check` 在不同版本中可能直接更新文件。
-- 未限定范围的“更新开发环境 / 全部开发工具”包含以上三项；只请求某一项时不扩展到其他项。
+- 未限定范围的“更新开发环境 / 全部开发工具”包含以上三项；“更新全部全局 npm 包”包含 npm 包和发现的 Codex 服务安装，但不更新 skills。用户明确限定某个包、排除服务器或只要求检查时，遵循该限制。
 
 ## npm 检查与更新
 
