@@ -15,6 +15,8 @@ description: 检查或更新全局 npm 工具、Codex 服务、全局 skills 和
 - **Pi agent 插件**：读取 [Pi 插件更新指引](references/pi-extensions.md)，使用已核实的 `pi update --extensions` 更新 Pi 管理的插件包，默认只处理个人/全局配置。
 - 未限定范围的“更新开发环境 / 全部开发工具”包含以上四项；“更新全部全局 npm 包”包含 npm 包和发现的 Codex 服务安装，但不额外执行 skills 或 Pi 插件管理器更新。用户明确限定某个包、排除服务器或只要求检查时，遵循该限制。
 
+发现 Codex 托管 daemon 时，按 [托管包更新分支](references/codex-server.md#codex-托管的-daemon-包)单独核对并更新其包；CLI、托管包和运行进程分别验证。daemon 更新可能中断任务，沿用服务重启的授权与会话条件；受阻时区分“托管包待更新”和“运行进程待重启”。
+
 ## npm 检查与更新
 
 把下面路径替换为当前 skill 的实际目录；命令可从任意工作目录运行。

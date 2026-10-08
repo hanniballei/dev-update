@@ -33,6 +33,24 @@ systemctl --user list-unit-files --type=service --no-legend | rg -i codex
 
 对于 shell 函数、别名和包装脚本，追踪至真实入口；对于 nvm、多用户或多 prefix，确认服务的用户、Node 与 npm 路径。不能把“当前 npm 中 Codex 已最新”当成“服务器已最新”。
 
+## Codex 托管的 daemon 包
+
+全局 npm 更新也包含发现的 Codex 托管 daemon，但它可能使用独立于 npm prefix 的包；`npm update -g` 或仅重启进程不能保证这份包已更新。在软件升级前识别部署方式，并在升级 CLI 后重新核对：
+
+1. 用实际 CLI 的 `codex app-server --help`、`codex app-server daemon --help` 确认命令能力；支持时运行 `codex app-server daemon version`。记录 `cliVersion`、`managedCodexPath`、`managedCodexVersion`、`appServerVersion` 和连接目标。字段缺失或查询失败时保留未验证状态，用实际入口与进程继续确认。
+2. 将托管路径与服务入口、运行进程及服务所属用户核对。路径字段存在不代表托管包已安装，`managedCodexVersion` 为 null 也不能单独证明部署方式。手工 systemd 服务仍按其实际安装渠道更新；服务管理器名称本身不能区分是否使用 Codex 托管包。
+3. 已确认使用 Codex 托管包时，单独比较托管包与本轮目标版本。CLI 已更新而托管包仍旧时，先核实 `codex app-server daemon update --help`。本机 Codex 0.161.0 帮助确认 `--from-cli` 会复制并固定当前 CLI 包，可用于将 daemon 对齐到本轮已升级、已验证的 CLI：
+
+```bash
+codex app-server daemon update --from-cli
+```
+
+在该服务所属用户及相同的 `CODEX_HOME`、连接配置下，从已核实的 CLI 入口执行；不要把维护者的默认 daemon 当成目标服务。保留用户指定的版本或渠道，托管包比当前 CLI 新时不自动用 `--from-cli` 降级。命令不支持时按实际版本及部署渠道处理，并明确报告未完成项。
+
+该命令可能中断正在运行的任务，执行前适用下方“安全重启”的授权与会话独立性条件；已有明确的 daemon 更新及中断授权直接复用。只有 npm 升级授权或当前会话依赖目标 daemon 时，先完成可独立执行的 CLI 更新，报告“托管包待更新”及独立执行命令，不能只写“待重启”。仅检查任务不运行此命令，也不通过 `bootstrap` 或 `start` 创建服务。更新失败时保留错误，不用重装 npm 或反复重启代替修复。
+
+执行后重新查询版本，并核对实际进程和已有健康检查：CLI 与托管包应符合本轮目标，运行中的 app-server 应匹配目标包。包已对齐但进程仍旧时，再按实际管理方式执行已授权的重启；已达到目标则无需额外重启。原先未运行的服务不主动启动，运行版本记为未运行。最终分别报告 CLI、托管包（不适用时注明）、运行版本和连接验证；版本字段相同不能代替用户可见连接验证。
+
 ## 更新与运行版本
 
 如果实际入口属于 `@openai/codex`，用对应的 Node 环境检查。示例中的路径来自发现结果，不硬编码服务器目录：
