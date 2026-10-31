@@ -10,6 +10,14 @@ npx skills add hanniballei/dev-update -g --skill dev-update -a codex -y
 
 需要其他代理时，将 `-a codex` 换成对应名称；安装这个 skill 不会更新服务器的软件包或重启服务。
 
+涉及 Codex 服务升级和重启时，推荐在独立 SSH / tmux 会话中使用 Pi：
+
+```bash
+pi --no-approve --skill ~/.agents/skills/dev-update
+```
+
+在 Pi 中显式调用 `/skill:dev-update 全局更新`。Pi 也支持自动发现 `~/.agents/skills/`；上述 `--skill` 指定已有安装，`--no-approve` 忽略项目配置。维护流程按执行器与服务的实际关系选择，不限定只能由 Pi 执行。
+
 ## 使用
 
 ```text
@@ -24,13 +32,37 @@ npx skills add hanniballei/dev-update -g --skill dev-update -a codex -y
 
 入口 [`SKILL.md`](SKILL.md) 按范围加载指引。npm 更新默认包括主版本升级；脚本不替换 linked / 本地 / Git 安装，不降级高于 `latest` 的版本，并把 npm 自身留到最后。服务重启与磁盘软件升级分开处理，避免中断当前代理会话。
 
-全局 npm 更新默认包含发现的 Codex 服务：skill 会定位服务实际使用的安装并升级，不局限于当前 shell 的 npm prefix。相同安装只更新一次，其他安装分别处理，并核对平台原生组件与运行版本。服务发现和跨安装更新由代理按服务器指引执行，不是 `npm_update.py` 单独扫描所有服务。当前会话所属服务需要重启时，先完成磁盘升级并明确报告待重启；不会把“未重启”误称为运行版本已更新。**运行版本落后时**，skill 用 `codex app-server daemon version` 取证，并问一次是否在安全的独立会话重启；当前会话不由该服务承载并获同意时自行重启并验证，否则给出命令和下次启动会看到的 daemon 兼容提示（不会在未经授权时中断服务）。
+全局 npm 更新默认包含发现的 Codex 服务：skill 会定位服务实际使用的安装并升级，不局限于当前 shell 的 npm prefix。相同安装只更新一次，其他安装分别处理，并核对平台原生组件与运行版本。服务发现和跨安装更新由代理按服务器指引执行，不是 `npm_update.py` 单独扫描所有服务。运行版本落后时，按当前 CLI 能力查询 daemon 或实际进程；已有重启授权且维护会话独立时，直接重启并验证。缺少授权且能安全重启时才询问；当前会话依赖该服务时，给出待重启状态、兼容提示和独立执行命令。版本一致仍有兼容提示时，按实际配置和 TUI 输出继续核对，案例中的特性开关不作为通用默认设置。
 
 **Codex 托管 daemon：** 它可能使用独立于全局 npm 的包。Skill 会按[托管包更新指引](references/codex-server.md#codex-托管的-daemon-包)识别部署方式；当前 CLI 支持时，用 `codex app-server daemon update --from-cli` 对齐到本轮已更新的 CLI，并分别验证 CLI、托管包与运行版本。该操作可能中断任务，需有相应授权且维护会话独立；未执行时明确报告托管包待更新。`npm_update.py --apply` 本身不更新托管 daemon 或重启服务。
 
-**注意 `skills check` 的版本差异：** 已核实 `skills@1.7.1` 的 `check` 是更新别名，不能用于仅检查任务；旧版本则可能还需要 `skills update` 才实际更新。具体流程见 [`references/skills-update.md`](references/skills-update.md)。不属于该 CLI 管理的技能会明确报告为未覆盖，而非声称已经更新。
+**注意 `skills check` 的版本差异：** 已核实 `skills@1.7.1` 的 `check` 是更新别名，不能用于仅检查任务；旧版本则可能还需要 `skills update` 才实际更新。具体流程见 [`references/skills-update.md`](references/skills-update.md)。不属于该 CLI 管理的技能会明确报告为未覆盖，而非声称已经更新。管理器更新只刷新已登记项，上游新增与移除靠下方的发现脚本例行报告。
+
+## Skills 发现脚本
+
+`skills update` 不发现上游仓库新增或移除的 skill。`scripts/skills_discover.py` 是只读脚本：按 CLI 同规则定位全局 lock，枚举每个 GitHub 来源上游的全部 `SKILL.md` 并与 lock 对比，不写 lock、不写磁盘。
+
+从仓库根目录执行：
+
+```bash
+python3 scripts/skills_discover.py
+python3 scripts/skills_discover.py --source mattpocock/skills
+```
+
+JSON 输出包含 `untracked`（上游新增未登记，附目录分组）、`missing_upstream`（lock 已登记但上游消失）、`errors`（单源失败与限流）、`truncated_sources` 与 `unsupported_sources`。运行环境需要可访问 GitHub API；未认证限流约 60 次/小时，可用 `GITHUB_TOKEN`/`GH_TOKEN` 或已登录的 `gh auth token` 提额，不要把 token 写入参数或报告。脚本失败（lock 不可读、指定来源不在 lock）退出 1，单源错误记录在输出中不退出非零。
+
+发现的新增 skill 由用户选定后按[补登记流程](references/skills-update.md#补登记新增-skill)精确安装，不用 `skills add --all` 重装。
 
 **Pi 插件更新：** 已用本机 Pi 1.0.4 的帮助及官方文档核实 `pi update --extensions`。Skill 默认追加 `--no-approve`，只更新个人/全局配置中的插件包，保留固定版本和 Git ref；不会把裸 `pi update` 的本体升级当成插件更新。完整开发环境更新包含此项，单独的 npm 或 skills 更新不自动扩展到插件管理器。详见 [`references/pi-extensions.md`](references/pi-extensions.md)。
+
+## 自更新与执行顺序
+
+计划涉及 Codex 服务或当前执行器时，用已有 `--package` 参数分批选择目标：先维护普通工具和 skills，再处理 Codex 安装及可安全执行的重启，当前执行器本体留到最后一个维护阶段，npm 自身放在所有 npm 批次末尾。空批次直接跳过，避免无 `--package` 的 `--apply` 意外扩大范围。分批是代理按 [`SKILL.md`](SKILL.md#更新前与执行顺序)安排的流程，脚本不会自动识别当前代理或服务依赖。
+
+- **更新 `dev-update` 本体：** 首次写入前复制指引、脚本和参考文件，并展开符号链接。本轮从独立快照继续执行，新版流程用于下一轮，避免后续读到不同版本的文件。快照方法见 [`references/skills-update.md`](references/skills-update.md#本-skill-的自更新)。
+- **Pi 更新自身：** 旧进程通常仍运行已加载的代码，磁盘升级不能保证动态导入或 reload 安全。在最后一个独立 shell / 脚本阶段完成本体更新、新 CLI 核对、已授权的插件更新及日志记录；旧会话只收尾，完整维护结束后重新启动 Pi。`/reload` 刷新资源，不能代替 Pi 本体重启。详见 [`references/pi-extensions.md`](references/pi-extensions.md#当前执行器是-pi-时)。
+
+执行快照保护本 skill 的文件一致性，不隔离 Pi 运行时或保证插件兼容。报告分别记录磁盘更新、运行版本及实际连接/资源验证；尚需重启、重新开启会话或未能验证的项目明确保留。
 
 ## npm 脚本
 
@@ -44,7 +76,7 @@ python3 scripts/npm_update.py --apply
 python3 scripts/npm_update.py --apply --package @openai/codex
 ```
 
-JSON 输出包含计划、跳过项，以及更新模式的逐包结果、安装后版本和剩余更新。检查成功退出 0，包括存在待更新包的情况；命令/数据错误、安装失败、版本核对失败或仍有目标更新时退出 1。有意跳过的来源会列出，不等于已更新。
+JSON 输出包含计划、跳过项，以及更新模式的逐包结果、安装后版本和剩余更新。可重复传入 `--package` 选择同一批中的多个包。检查成功退出 0，包括存在待更新包的情况；命令/数据错误、安装失败、版本核对失败或仍有目标更新时退出 1。有意跳过的来源会列出，不等于已更新。
 
 如使用其他 Node 安装，设置对应 `PATH` 并传入 `--npm /absolute/path/to/npm`。作用域是该 npm 的全局 prefix，不会扫描所有用户和所有 Node 安装。npm 安装可能执行第三方生命周期脚本，应在已有更新授权下使用 `--apply`。
 
