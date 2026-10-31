@@ -131,6 +131,22 @@ class SkillsDiscoverTests(unittest.TestCase):
         self.assertEqual(report["untracked"], [])
         self.assertEqual(report["missing_upstream"], [])
 
+    def test_dot_directories_are_kept_when_comparing_paths(self):
+        lock = {
+            "skills": {
+                "claude": github_source("claude", ".claude/skills/claude/SKILL.md"),
+                "agents": github_source("agents", "./.agents/skills/agents/SKILL.md"),
+            }
+        }
+        paths = [".claude/skills/claude/SKILL.md", ".agents/skills/agents/SKILL.md"]
+        fake = FakeGitHub({"owner/repo": {"branch": "main", "paths": paths}})
+
+        exit_code, report = self.invoke(lock, fake)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["untracked"], [])
+        self.assertEqual(report["missing_upstream"], [])
+
     def test_rate_limit_stops_remaining_sources(self):
         lock = {
             "skills": {

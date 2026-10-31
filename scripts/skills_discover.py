@@ -36,6 +36,13 @@ def load_lock(path):
     return data
 
 
+def strip_relative_prefix(path):
+    """Drop a leading './' or '/' without eating dot-directories like '.claude'."""
+    while path.startswith("./"):
+        path = path[2:]
+    return path.lstrip("/")
+
+
 def group_sources(lock):
     github = {}
     unsupported = {}
@@ -46,7 +53,7 @@ def group_sources(lock):
         skill_path = meta.get("skillPath")
         if not isinstance(source, str) or not isinstance(skill_path, str):
             continue
-        entry = {"name": name, "path": skill_path.lstrip("./").lstrip("/")}
+        entry = {"name": name, "path": strip_relative_prefix(skill_path)}
         if meta.get("sourceType") == "github":
             github.setdefault(source, []).append(entry)
         else:
