@@ -66,11 +66,11 @@ python3 /path/to/dev-update/scripts/skills_discover.py
 DISABLE_TELEMETRY=1 npx --yes skills@VERSION add SOURCE -g -y --skill NAME...
 ```
 
-`VERSION` 沿用本轮已解析的 CLI 版本，`SOURCE` 为 lock 中的来源（如 `mattpocock/skills`），`--skill` 接受多个名称（脚本输出 `untracked[].name`）。补登记属于新增安装而非更新，会写入 lock 和技能目录，执行前向用户确认清单。安装后重新运行 `skills_discover.py` 并用 `list -g --json` 验证登记。
+`VERSION` 沿用本轮已解析的 CLI 版本，`SOURCE` 为 lock 中的来源（如 `mattpocock/skills`），`--skill` 接受多个名称（脚本输出 `untracked[].name`）。补登记属于新增安装而非更新，会写入 lock 和技能目录，执行前按 [审批点](../SKILL.md#审批点必须显式提出) 输出标记块并取得明确批准。安装后重新运行 `skills_discover.py` 并用 `list -g --json` 验证登记。
 
 ### 处理上游消失
 
-`missing_upstream` 只报告不处理：与用户确认后再用 `skills remove -g NAME` 移除或保留冻结副本。批量移动通常是上游路径重构，新路径会同时出现在 `untracked` 中；此时按重构处理，先补登记新条目，再按用户确认移除旧条目。
+`missing_upstream` 只报告不处理：按 [审批点](../SKILL.md#审批点必须显式提出) 取得批准后，再用 `skills remove -g NAME` 移除或保留冻结副本。批量移动通常是上游路径重构，新路径会同时出现在 `untracked` 中；此时按重构处理，先补登记新条目，再按用户确认移除旧条目。
 
 ## 更新全部全局 Skills
 

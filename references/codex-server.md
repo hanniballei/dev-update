@@ -72,45 +72,50 @@ npm 更新只替换磁盘文件，已有进程通常继续运行旧版本。分�
 
 ## 安全重启
 
-只有已获授权、确认目标服务且不会中断当前会话时才重启。明确要求“重启 Codex 服务”可复用授权；单纯请求全局包升级不代表允许中断服务。
+先根据进程归属和启动方式判断当前维护会话是否依赖目标服务。独立 SSH / tmux 中的 Pi 可继续执行该服务重启后的验证；从目标 Codex 会话启动的 Pi 子进程仍可能随服务停止而中断。关系无法确认时，保留当前会话并给出独立执行命令。
 
-磁盘升级完成后，只要服务仍在运行旧版本，就用下面这条命令取证，而不是只看 npm 版本：
+升级后先查看实际 CLI 的 `codex app-server --help`。仅在提供 `daemon` 及其 `version` 子命令时使用下面的查询；子命令不存在时，复用前述服务 PID、实际入口和 `/proc/PID/exe --version`，其他平台使用部署已有的运行版本接口。支持命令但查询失败时保留错误并继续核对进程，不把查询失败当成服务未运行，也不启动新 daemon 来完成检查。
 
 ```bash
 codex app-server daemon version
 ```
 
-`cliVersion` 是磁盘 CLI，`appServerVersion` 是运行中的服务。两者不一致时向用户要一次明确决定，并说明影响：当前代理不是由该 app-server 承载、且用户同意重启时，重启这一个服务并按下一节验证；用户不同意或当前代理由该服务承载时，不重启，但必须写出用户可见的后果和可执行命令，不能只写“需要重启”就结束。
+本机已核实版本中，`cliVersion` 是磁盘 CLI，`appServerVersion` 是查询所连接服务的运行版本。将查询指向的服务或 socket 与发现的部署核对；另有服务安装时，不能用默认 daemon 的结果代替其运行版本。
+
+只有已获授权、确认目标服务且不会中断维护会话时才重启。已有明确的重启授权就直接复用，不再请求一次确认；单纯的全局包升级授权不包括中断服务。运行版本落后且可以安全重启、但缺少授权时，再按 [审批点](../SKILL.md#审批点必须显式提出) 请求这一具体服务的重启决定，并说明受影响会话。用户不同意、会话依赖该服务或关系不明时，完成其他已授权维护，报告待重启状态及独立执行命令；不自行停止当前服务或安排后台定时重启。
 
 允许重启时只操作发现的那一个服务；重启后核对 active 状态、新 PID、运行版本，以及部署已有的健康检查。未运行的服务不因软件升级而自动启动。重启或健康验证失败时报告事实，保留诊断证据；版本回退需要单独授权。
 
 ## 未重启时的用户可见后果
 
-磁盘已升级而服务仍是旧版本时，新版 TUI 启动会向后台 server 请求 `experimentalFeature/list`（请求标记 `tui-daemon-features`）并比对特性设置；不一致会出现：
+报告实际观察到的兼容异常。以下是本机 Codex 0.161.0 的已核实案例，其他版本按实际帮助、部署方式和 TUI 输出判断；尚未验证时标为可能出现，不能声称已经观察到。
+
+该版本 TUI 会向后台 server 请求 `experimentalFeature/list`（请求标记 `tui-daemon-features`）并比对特性设置；不一致时可能出现：
 
 ```text
 Background server has incompatible feature settings
   Run without daemon this time / Restart with these settings
 ```
 
-服务不是 Codex 托管时（`managedCodexVersion` 为 null、`$CODEX_HOME/app-server-daemon/settings.json` 缺失）还会补一句“This server is not managed by Codex. Restart cannot resolve this compatibility check.”，于是用户只剩“不用 daemon”这一个选项。旧服务也可能报“The local Codex service cannot check background terminals”。
+本机由 systemd 手工托管的服务（`managedCodexVersion` 为 null、`$CODEX_HOME/app-server-daemon/settings.json` 缺失）还提示“This server is not managed by Codex. Restart cannot resolve this compatibility check.”，内置重启选项不可用。旧服务也可能报“The local Codex service cannot check background terminals”。这些字段和提示是部署证据，不是所有版本判断托管方式的固定规则。
 
-这种情况下的报告要包含：实际提示文案、可临时使用的 `codex --no-daemon`、以及独立会话的重启命令。不要把“磁盘已更新”说成“服务已更新”。
+这种情况下的报告要包含提示文案、经当前 CLI 帮助核实的临时运行方式，以及实际服务管理器的独立重启命令。本机该版本可临时使用 `codex --no-daemon`；其他版本先确认支持。分别报告“磁盘已更新”“运行版本待重启”“连接验证通过或未验证”。
 
-重启后若同一提示仍出现，说明两边版本已一致、但特性设置仍不同。2026-10-07 在 0.161.0 手工托管 daemon 上实测：提示会直接列出要求共享的设置（例如 `api_key_model_discovery = true`、`auth_elicitation = true`、`code_mode_host = true`、`mcp_oauth_refresh_coordination = false`），并附“This session requires <feature> to be enabled”；`Restart with these settings` 因服务不由 Codex 托管而置灰。
+重启后同一提示仍出现时，先重新核对实际运行版本；版本一致仍报错，再检查客户端与服务的特性设置及实际连接目标。2026-10-07 在 0.161.0 手工托管 daemon 上实测：提示直接列出要求共享的设置，并附“This session requires <feature> to be enabled”；`Restart with these settings` 因服务不由 Codex 托管而置灰。
 
-处理：把列出的设置写进客户端与服务共用的 `config.toml` 的 `[features]`（服务命令行上用 `-c features.<name>=...` 单独设置的特性也一并写进去），备份配置后重启服务，再用真实 TUI 验证；不要为了消除提示而删掉特性开关，也不要因此宣称服务已更新。
+按该版本支持的特性、实际提示、共享配置及服务命令行覆盖项核对差异；在已授权的设置范围内备份并修复配置，然后按重启条件再次验证真实 TUI。保留用户选择的特性，不把本机案例中的开关和值复制成通用默认配置，也不靠删除特性开关隐藏异常。
 
 ## 验证用户可见行为
 
-`codex features list`、`codex doctor` 只能证明配置和版本，不能证明 TUI 不再弹提示。验证这类提示时在 tmux 或伪终端里真实启动一次 TUI，抓屏后搜索提示文案，然后结束该会话：
+`codex features list`、`codex doctor` 的配置和版本检查不能证明 TUI 不再弹提示。验证这类提示时，在 tmux 或伪终端里真实启动一次使用同一服务和配置的 TUI，等待连接结果并检查已观察的提示文案。无法执行时明确标为连接未验证。下面是本机验证示例，测试会话使用唯一名称，结束时只关闭本次新建的会话：
 
 ```bash
-tmux new-session -d -s codexcheck -x 110 -y 34
-tmux send-keys -t codexcheck 'cd <信任目录> && TERM=xterm-256color codex' Enter
+check_session="codexcheck-$(date +%s)-$$"
+tmux new-session -d -s "$check_session" -x 110 -y 34
+tmux send-keys -t "$check_session" 'cd <信任目录> && TERM=xterm-256color codex' Enter
 sleep 25
-tmux capture-pane -p -t codexcheck -S -400 | grep -c "incompatible feature settings"
-tmux kill-session -t codexcheck
+tmux capture-pane -p -t "$check_session" -S -400
+tmux kill-session -t "$check_session"
 ```
 
 在受信任目录启动可避免文件夹信任提示；不得用这种方式发送对话或启动新任务。
