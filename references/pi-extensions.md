@@ -9,7 +9,7 @@ pi update --help
 pi list --help
 ```
 
-本机制作时核实的入口属于 `@earendil-works/pi-coding-agent@1.0.4`，支持 `pi update --extensions`。环境可能还安装旧分发或 fork；以实际入口和该版本帮助为准，不自动切换到另一套 Pi，也不把 `omp` 当成同一个插件管理器。Pi 未安装时报告未覆盖，不为了更新插件而安装 Pi。
+本机制作时核实的入口属于 `@earendil-works/pi-coding-agent@1.0.4`，支持 `pi update --extensions`；2026-10-31 复核本机已到 1.4.0，`pi update --help` 的 `--self/--extensions/--models/--all/--no-approve` 仍有效。环境可能还安装旧分发或 fork；以实际入口和该版本帮助为准，不自动切换到另一套 Pi，也不把 `omp` 当成同一个插件管理器。Pi 未安装时报告未覆盖，不为了更新插件而安装 Pi。
 
 ## 检查与更新范围
 
@@ -42,6 +42,15 @@ pi update --extensions --no-approve
 
 这一阶段按步骤失败即停，并保留日志和剩余命令。无法建立独立执行阶段时，明确报告 Pi 本体待更新并提供独立终端命令；不能强行结束当前会话或把延期项说成已更新。当前执行器不是 Pi 时，也应在 Pi 本体更新后用新 CLI 重新确认帮助，再更新插件。
 
+## 插件目录的依赖与安装脚本
+
+`pi update --extensions` 维护的是一份独立 npm 项目（本机为 `~/.pi/agent/npm`），有自己的 `package.json`、lock 和 `node_modules`；全局 npm prefix 的审计结论不覆盖它。
+
+- 需要时单独审计：`cd ~/.pi/agent/npm && npm audit`。
+- `npm audit fix` 可能因插件声明的 peer 区间滞后而 ERESOLVE 失败（本机：`pi-background-tasks@2.6.10` 声明 `@earendil-works/pi-coding-agent ^0.81–^0.84`，实际 Pi 已 1.4.0）。这属于审批点：不要自动追加 `--legacy-peer-deps` 或 `--force`；获批后才执行，执行前备份 `package.json` 与 `package-lock.json`，回滚用 `npm ci --legacy-peer-deps`。
+- `npm install-scripts approve <pkg>` 会把允许项写进该 `package.json` 的 `allowScripts`；`pi update --extensions` 重写这个文件时可能丢失。每轮插件更新后复查 `npm install-scripts ls`，发现警告回归即为此原因。
+- 这些依赖只影响插件运行时；验证仍以 `pi list --no-approve` 和重启后的真实加载为准。
+
 ## 固定版本与验证
 
 - 保留 npm 固定版本和 Git ref；更新不能自行解除锁定或修改插件声明，其他更新路径也应遵守这些约束。新版本会将 Git checkout 对齐声明的 ref，旧版本可能直接跳过固定来源。
@@ -50,4 +59,4 @@ pi update --extensions --no-approve
 - 捕获更新日志和退出码，更新后再次运行 `pi list --no-approve`，核对实际安装版本或 commit；不能只凭插件仍出现在清单中就称升级成功。
 - 磁盘更新不保证正在运行的 Pi 会话已加载新插件。仅插件或 skill 变化时，在完整维护结束后按该版本支持的 reload 方式或下一次启动加载；Pi 本体变化时重新启动，新会话再验证插件，不自行终止当前会话。
 
-来源：[Pi 官方 CLI 文档](https://pi.dev/docs/latest/cli#update-pi-or-packages)、[Pi 官方包管理文档](https://pi.dev/docs/latest/packages)、[Pi 扩展生命周期](https://pi.dev/docs/latest/extensions#respect-the-runtime-lifecycle)。自更新阶段是本 skill 的维护策略；已核对本机 Pi 1.0.4 的 skill 按路径读取、动态导入及资源 reload 实现，不代表上游保证旧进程可无缝自更新。
+来源：[Pi 官方 CLI 文档](https://pi.dev/docs/latest/cli#update-pi-or-packages)、[Pi 官方包管理文档](https://pi.dev/docs/latest/packages)、[Pi 扩展生命周期](https://pi.dev/docs/latest/extensions#respect-the-runtime-lifecycle)。自更新阶段是本 skill 的维护策略；已核对本机 Pi 1.4.0 的 skill 按路径读取、动态导入及资源 reload 实现，不代表上游保证旧进程可无缝自更新。

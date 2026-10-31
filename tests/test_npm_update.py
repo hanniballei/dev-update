@@ -10,10 +10,14 @@ from scripts import npm_update
 
 
 class FakeNpm:
-    def __init__(self, installed=None, latest=None, failures=None):
+    def __init__(
+        self, installed=None, latest=None, failures=None, npm_latest=None, view_error=False
+    ):
         self.installed = copy.deepcopy(installed or {})
         self.latest = latest or {}
         self.failures = failures or set()
+        self.npm_latest = npm_latest
+        self.view_error = view_error
         self.calls = []
 
     def __call__(self, command, **options):
@@ -24,6 +28,11 @@ class FakeNpm:
             exit_code = 0
         elif operation == "ls":
             output = json.dumps({"dependencies": self.installed})
+            exit_code = 0
+        elif operation == "view":
+            if self.view_error or self.npm_latest is None:
+                return subprocess.CompletedProcess(command, 1, "", "registry unavailable")
+            output = self.npm_latest + "\n"
             exit_code = 0
         elif operation == "outdated":
             entries = {
@@ -63,7 +72,10 @@ class NpmUpdateTests(unittest.TestCase):
         self.assertEqual(report["prefix"], "/tmp/test-node")
         self.assertEqual(report["mode"], "check")
         self.assertTrue(report["updates"][0]["major_upgrade"])
-        self.assertEqual([command[1] for command in fake.calls], ["prefix", "ls", "outdated"])
+        self.assertEqual(
+            [command[1] for command in fake.calls], ["prefix", "ls", "outdated", "view"]
+        )
+        self.assertEqual(report["npm_self"]["error"], "npm view exited with 1")
 
     def test_current_inventory_includes_codex_without_installing(self):
         fake = FakeNpm({"@openai/codex": {"version": "0.160.1"}})
@@ -79,7 +91,8 @@ class NpmUpdateTests(unittest.TestCase):
                 "@openai/codex": {"version": "0.159.0"},
                 "z-tool": {"version": "1.0.0"},
             },
-            {"npm": "11.0.0", "@openai/codex": "0.160.1", "z-tool": "2.0.0"},
+            {"@openai/codex": "0.160.1", "z-tool": "2.0.0"},
+            npm_latest="11.0.0",
         )
         exit_code, report = self.invoke(fake, "--apply")
         self.assertEqual(exit_code, 0)
@@ -154,6 +167,54 @@ class NpmUpdateTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(report["installed_count"], 0)
         self.assertIsNone(report["codex_installed"])
+        self.assertNotIn("updates", [entry["package"] for entry in report["updates"]])
+
+    def test_npm_self_upgrade_is_planned_last_and_verified(self):
+        fake = FakeNpm(
+            {"npm": {"version": "10.2.0"}, "tool": {"version": "1.0.0"}},
+            {"tool": "2.0.0"},
+            npm_latest="11.0.0",
+        )
+        exit_code, report = self.invoke(fake, "--apply")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            report["npm_self"], {"package": "npm", "current": "10.2.0", "latest": "11.0.0"}
+        )
+        self.assertTrue(
+            [entry for entry in report["updates"] if entry["package"] == "npm"][0]["major_upgrade"]
+        )
+        installs = [command[-1] for command in fake.calls if command[1] == "install"]
+        self.assertEqual(installs, ["tool@2.0.0", "npm@11.0.0"])
+        self.assertEqual(
+            [result["status"] for result in report["results"]], ["verified", "verified"]
+        )
+
+    def test_npm_self_registry_failure_does_not_fail_the_check(self):
+        fake = FakeNpm({"npm": {"version": "10.2.0"}}, view_error=True)
+        exit_code, report = self.invoke(fake, "--apply")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["npm_self"]["current"], "10.2.0")
+        self.assertIn("error", report["npm_self"])
+        self.assertEqual(report["updates"], [])
+        self.assertNotIn("install", [command[1] for command in fake.calls])
+
+    def test_npm_self_is_excluded_by_package_selection(self):
+        fake = FakeNpm(
+            {"npm": {"version": "10.2.0"}, "tool": {"version": "1.0.0"}},
+            {"tool": "2.0.0"},
+            npm_latest="12.0.0",
+        )
+        exit_code, report = self.invoke(fake, "--apply", "--package", "tool")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual([result["package"] for result in report["results"]], ["tool"])
+        self.assertNotIn("npm@12.0.0", [command[-1] for command in fake.calls])
+
+    def test_npm_self_current_version_is_not_planned(self):
+        fake = FakeNpm({"npm": {"version": "10.2.0"}}, npm_latest="10.2.0")
+        exit_code, report = self.invoke(fake)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["npm_self"]["latest"], "10.2.0")
+        self.assertEqual(report["updates"], [])
 
     def test_missing_npm_returns_json_error(self):
         output = io.StringIO()

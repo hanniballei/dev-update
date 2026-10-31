@@ -75,6 +75,40 @@ def outdated(npm):
     return read_json(npm, ["outdated", "--global", "--depth=0", "--json"], accepted=(0, 1))
 
 
+def registry_version(npm, package):
+    """Latest published version from the registry; npm itself is absent from `npm outdated`."""
+    version = run_npm(npm, ["view", package, "version"], timeout=60).stdout.strip()
+    if VERSION.fullmatch(version) is None:
+        raise UpdateError(f"npm view {package} returned an unexpected version")
+    return version
+
+
+def npm_self_entry(npm, installed, packages):
+    """Describe npm's own upgrade state; never raises, so a registry failure stays reportable."""
+    current = installed.get("npm", {}).get("version")
+    entry = {"package": "npm", "current": current}
+    try:
+        entry["latest"] = registry_version(npm, "npm")
+    except UpdateError as error:
+        entry["error"] = str(error)
+        return entry, None, None
+    current_key = version_key(current)
+    latest_key = version_key(entry["latest"])
+    if packages and "npm" not in packages:
+        return entry, None, None
+    if current_key is None or latest_key is None:
+        return entry, None, {"reason": "non_registry_version"}
+    if latest_key < current_key:
+        return entry, None, {"reason": "installed_version_is_newer_than_latest"}
+    if latest_key == current_key:
+        return entry, None, None
+    plan = {
+        **entry,
+        "major_upgrade": latest_key[0][0] > current_key[0][0],
+    }
+    return entry, plan, None
+
+
 def make_plan(installed, updates, packages):
     unknown = packages - installed.keys()
     if unknown:
@@ -120,12 +154,20 @@ def check(npm, packages):
     if not os.path.isabs(prefix):
         raise UpdateError("npm prefix did not return an absolute path")
     installed = inventory(npm)
-    plan, skipped = make_plan(installed, outdated(npm), packages)
+    updates = outdated(npm)
+    updates.pop("npm", None)
+    plan, skipped = make_plan(installed, updates, packages)
+    npm_self, npm_plan, npm_skipped = npm_self_entry(npm, installed, packages)
+    if npm_plan:
+        plan.append(npm_plan)
+    if npm_skipped:
+        skipped.append({"package": "npm", **npm_skipped})
     return {
         "npm": npm,
         "prefix": prefix,
         "installed_count": len(installed),
         "codex_installed": installed.get("@openai/codex", {}).get("version"),
+        "npm_self": npm_self,
         "updates": plan,
         "skipped": skipped,
     }

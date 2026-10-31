@@ -86,6 +86,35 @@ codex app-server daemon version
 
 允许重启时只操作发现的那一个服务；重启后核对 active 状态、新 PID、运行版本，以及部署已有的健康检查。未运行的服务不因软件升级而自动启动。重启或健康验证失败时报告事实，保留诊断证据；版本回退需要单独授权。
 
+## 重启卡死与僵尸 socket
+
+`systemctl restart` 返回 0 不代表服务已切到新二进制。重启后先等十几秒再读状态，按下面顺序判断：
+
+1. `systemctl is-active` 仍为 `activating`、`MainPID` 为 0、`NRestarts` 持续增大，即启动失败循环。
+2. `journalctl -u <unit> -n 40` 出现 `Error: app-server control socket is already in use at …`，说明旧进程没真正停下来，仍占着 control socket。本机实测：`TimeoutStopSec=20` 停止超时后留下一个 PPID=1 的孤儿 app-server，随后 9 次启动全部因此失败。
+
+处置顺序（每步可独立执行）：
+
+```bash
+systemctl stop <unit>                                # 先停掉重启循环
+ps -eo pid,ppid,cmd | grep 'app-server --listen'     # 找占 socket 的进程，PPID=1 多为孤儿
+kill -TERM <pid>; sleep 8; kill -0 <pid> && kill -9 <pid>
+ls -l "$CODEX_HOME/app-server-control/app-server-control.sock"   # 随进程退出应消失
+systemctl start <unit>
+```
+
+不要用 `daemon restart`（非托管部署会直接报不支持），不要删除整个 `app-server-control` 目录，也不要在 socket 仍被占用时反复 start。
+
+加固：备份 unit 后调大停止超时并清理 socket，再 `systemctl daemon-reload` 并重启验证一次（本机已核实可行）：
+
+```ini
+TimeoutStopSec=40
+KillMode=mixed
+ExecStopPost=-/bin/rm -f /root/.codex/app-server-control/app-server-control.sock
+```
+
+通过标准：`Result=success`、`NRestarts=0`、`MainPID` 非 0、socket 符号链接重新出现，且 `codex app-server daemon version` 的 `cliVersion` 与 `appServerVersion` 一致。
+
 ## 未重启时的用户可见后果
 
 报告实际观察到的兼容异常。以下是本机 Codex 0.161.0 的已核实案例，其他版本按实际帮助、部署方式和 TUI 输出判断；尚未验证时标为可能出现，不能声称已经观察到。

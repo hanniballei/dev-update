@@ -66,11 +66,13 @@ python3 /path/to/dev-update/scripts/skills_discover.py
 DISABLE_TELEMETRY=1 npx --yes skills@VERSION add SOURCE -g -y --skill NAME...
 ```
 
-`VERSION` 沿用本轮已解析的 CLI 版本，`SOURCE` 为 lock 中的来源（如 `mattpocock/skills`），`--skill` 接受多个名称（脚本输出 `untracked[].name`）。补登记属于新增安装而非更新，会写入 lock 和技能目录，执行前按 [审批点](../SKILL.md#审批点必须显式提出) 输出标记块并取得明确批准。安装后重新运行 `skills_discover.py` 并用 `list -g --json` 验证登记。
+`VERSION` 沿用本轮已解析的 CLI 版本，`SOURCE` 为 lock 中的来源（如 `mattpocock/skills`），`--skill` 可重复传入多个名称。**`--skill` 用的是 SKILL.md 里的 `name`，不是发现脚本输出的目录名**：两者不一致时 CLI 会静默跳过该名称（本轮实测 `template→template-skill`、`onchain-pay→onchain-pay-open-api`、`outline→ast-grep-outline`）。名称对不上时先用一个不存在的名字触发 `add`，从它打印的 `Available skills` 列表映射真实名称，不要改 lock。每个 skill 都报 `✗ … → <Agent>: … does not support global skill installation`（如 PromptScript）是该 agent 不支持全局安装，不是本机失败。补登记属于新增安装而非更新，会写入 lock 和技能目录，执行前按 [审批点](../SKILL.md#审批点必须显式提出) 输出标记块并取得明确批准。安装后重新运行 `skills_discover.py`，并用 `list -g --json` 或下方的交叉验证核对登记。
+
+`untracked` 不等于“都能装”：发现脚本枚举仓库里所有 `SKILL.md`，而 CLI 只索引它认的 skill。典型不可安装项：`skill-data/*`（数据/附件目录）、`.automations/*`（仓库自动化）、`cli/assets/*` 等与其他目录同名的副本。先按 `group` 过滤再决定，不要为这些路径反复重试安装。
 
 ### 处理上游消失
 
-`missing_upstream` 只报告不处理：按 [审批点](../SKILL.md#审批点必须显式提出) 取得批准后，再用 `skills remove -g NAME` 移除或保留冻结副本。批量移动通常是上游路径重构，新路径会同时出现在 `untracked` 中；此时按重构处理，先补登记新条目，再按用户确认移除旧条目。
+`missing_upstream` 只报告不处理：按 [审批点](../SKILL.md#审批点必须显式提出) 取得批准后，再用 `skills remove -g NAME` 移除或保留冻结副本。路径重构（如 `claude/skills` → `.claude/skills`）时**先 `add` 新路径**：同名条目不新增重复项，而是就地改写 lock 的 `skillPath`，旧路径随之消失；反过来先 `remove` 再 `add` 会删掉刚装的新副本。批量移动时新路径会同时出现在 `untracked` 中，按重构处理。
 
 ## 更新全部全局 Skills
 
@@ -92,7 +94,7 @@ DISABLE_TELEMETRY=1 npx --yes skills@VERSION update -g -y
 
 ## 验证与覆盖范围
 
-- 捕获更新日志和退出码，再运行 `list -g --json`；结合更新前后的 lock hash 和文件确认发生的更新。不再次运行可能写入的 `check` 充当验证。
+- 捕获更新日志和退出码，再运行 `list -g --json`；结合更新前后的 lock hash 和文件确认发生的更新。不再次运行可能写入的 `check` 充当验证。skill 数量上百后该命令可能很慢甚至超时（本轮 162 条时超过 5 分钟）；超时不算失败，改用交叉验证：lock 条目数、`~/.agents/skills/*/SKILL.md` 目录数，以及每个 SKILL.md frontmatter `name` 与目录名是否一致（应为 0 处不一致）。
 - 退出码 0 仍需检查来源不可访问、跳过、失败及删除/迁移提示；不能只据退出码断言全部最新。
 - `skills` 只维护自身可追踪的安装。手工复制、缺少 lock 元数据、本地来源，以及 Codex 插件缓存或内置 system skills 不能据此宣称已更新。
 - 更新完成不等于覆盖完整：`update` 不发现上游新增/移除，须附上发现脚本结果或明确说明未运行；“全部最新”只针对 lock 已登记项。
