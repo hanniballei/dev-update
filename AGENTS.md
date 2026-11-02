@@ -3,8 +3,10 @@
 ## Project Structure & Module Organization
 
 `SKILL.md` is the skill entry point. Executable helpers live in `scripts/`, tests in
-`tests/`, and on-demand documentation in `references/`. Keep only entry points and
-project configuration at the root. Runtime helpers use Python's standard library.
+`tests/`, and on-demand documentation in `references/`. Fixture-based policy
+simulations live in `evals/`; keep generated evaluation results outside the
+repository. Keep only entry points and project configuration at the root. Runtime
+helpers use Python's standard library.
 
 ## Build, Test, and Development Commands
 
