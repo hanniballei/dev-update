@@ -125,6 +125,9 @@ def make_plan(installed, updates, packages):
         current = installed[name].get("version")
         latest = details.get("latest")
         entry = {"package": name, "current": current, "latest": latest}
+        if name == "node":
+            skipped.append({**entry, "reason": "node_runtime_excluded"})
+            continue
         resolved = installed[name].get("resolved", "")
         if not isinstance(resolved, str):
             raise UpdateError(f"Invalid installed source: {name}")

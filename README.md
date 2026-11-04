@@ -91,6 +91,8 @@ python3 scripts/npm_update.py --apply --package @openai/codex
 
 JSON 输出包含计划、跳过项，以及更新模式的逐包结果、安装后版本和剩余更新。可重复传入 `--package` 选择同一批中的多个包。检查成功退出 0，包括存在待更新包的情况；命令/数据错误、安装失败、版本核对失败或仍有目标更新时退出 1。有意跳过的来源会列出，不等于已更新。
 
+npm 更新保持 Node.js 不变：全局 `node` 包列入跳过项，原因为 `node_runtime_excluded`，显式指定 `--package node` 也不会升级；其他包和 npm 本体仍按原规则更新。不通过其他安装渠道升级或切换 Node.js，也不为解决版本不兼容而强制更新。
+
 如使用其他 Node 安装，设置对应 `PATH` 并传入 `--npm /absolute/path/to/npm`。作用域是该 npm 的全局 prefix，不会扫描所有用户和所有 Node 安装。npm 安装可能执行第三方生命周期脚本，应在已有更新授权下使用 `--apply`。
 
 没有必需的新增环境变量。复用本机 npm registry/auth 配置；skills 私有来源复用其支持的 GitHub 认证。不要把 token 放入参数、报告或仓库。`DISABLE_TELEMETRY=1` 是 skills CLI 的可选遥测开关；Pi 插件维护需要可用的 `pi` 命令，并遵循已有 `PI_CODING_AGENT_DIR` 路径配置；其他路径和权限使用当前环境配置。

@@ -106,6 +106,75 @@ class NpmUpdateTests(unittest.TestCase):
         self.assertEqual(report["remaining_updates"], [])
         self.assertEqual(report["results"][0]["after"], "0.160.1")
 
+    def test_check_skips_node_but_keeps_other_updates(self):
+        fake = FakeNpm(
+            {"node": {"version": "22.0.0"}, "tool": {"version": "1.0.0"}},
+            {"node": "24.0.0", "tool": "1.1.0"},
+        )
+        exit_code, report = self.invoke(fake)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual([entry["package"] for entry in report["updates"]], ["tool"])
+        self.assertEqual(
+            report["skipped"],
+            [
+                {
+                    "package": "node",
+                    "current": "22.0.0",
+                    "latest": "24.0.0",
+                    "reason": "node_runtime_excluded",
+                }
+            ],
+        )
+        self.assertNotIn("install", [command[1] for command in fake.calls])
+
+    def test_apply_preserves_node_and_updates_npm_last(self):
+        fake = FakeNpm(
+            {
+                "node": {"version": "22.0.0"},
+                "node-gyp": {"version": "11.0.0"},
+                "npm": {"version": "10.0.0"},
+            },
+            {"node": "24.0.0", "node-gyp": "11.1.0"},
+            npm_latest="10.1.0",
+        )
+        exit_code, report = self.invoke(fake, "--apply")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(fake.installed["node"]["version"], "22.0.0")
+        self.assertEqual(
+            [command[-1] for command in fake.calls if command[1] == "install"],
+            ["node-gyp@11.1.0", "npm@10.1.0"],
+        )
+        self.assertEqual([result["status"] for result in report["results"]], ["verified"] * 2)
+        self.assertEqual(report["remaining_updates"], [])
+        self.assertEqual(report["remaining_skipped"], report["skipped"])
+        self.assertEqual(report["skipped"][0]["reason"], "node_runtime_excluded")
+
+    def test_node_only_update_is_skipped_even_when_explicitly_selected(self):
+        for arguments in [("--apply",), ("--apply", "--package", "node")]:
+            with self.subTest(arguments=arguments):
+                fake = FakeNpm({"node": {"version": "22.0.0"}}, {"node": "24.0.0"})
+                exit_code, report = self.invoke(fake, *arguments)
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(report["updates"], [])
+                self.assertEqual(report["results"], [])
+                self.assertEqual(report["remaining_updates"], [])
+                self.assertEqual(report["skipped"][0]["reason"], "node_runtime_excluded")
+                self.assertEqual(report["remaining_skipped"], report["skipped"])
+                self.assertEqual(fake.installed["node"]["version"], "22.0.0")
+                self.assertNotIn("install", [command[1] for command in fake.calls])
+
+    def test_package_selection_keeps_node_out_of_scope(self):
+        fake = FakeNpm(
+            {"node": {"version": "22.0.0"}, "tool": {"version": "1.0.0"}},
+            {"node": "24.0.0", "tool": "1.1.0"},
+        )
+        exit_code, report = self.invoke(fake, "--apply", "--package", "tool")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual([result["package"] for result in report["results"]], ["tool"])
+        self.assertEqual(report["skipped"], [])
+        self.assertEqual(report["remaining_skipped"], [])
+        self.assertEqual(fake.installed["node"]["version"], "22.0.0")
+
     def test_selected_package_does_not_update_others(self):
         fake = FakeNpm(
             {"tool": {"version": "1.0.0"}, "other": {"version": "1.0.0"}},

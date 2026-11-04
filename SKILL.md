@@ -61,6 +61,8 @@ description: 检查或更新全局开发工具，按 npm、原生 CLI、官方�
 
 ## npm 检查与更新
 
+保持现有 Node.js 运行时与版本选择不变：npm 更新跳过全局 `node` 包，即使显式传入 `--package node` 也列入 `skipped`（`reason: node_runtime_excluded`）；npm 本体仍按原规则最后更新。不为完成 npm 更新而通过 nvm、fnm、n、系统包管理器或官方安装器升级或切换 Node.js。若更新因 Node.js 版本不兼容而失败，报告原因并继续独立目标，不通过升级 Node.js 或 `--force` 绕过。
+
 把下面路径替换为当前 skill 的实际目录；命令可从任意工作目录运行。
 
 ```bash
